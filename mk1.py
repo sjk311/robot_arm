@@ -50,7 +50,7 @@ def inverse_kinematics(x, y):
 
 # === 모터 초기화 및 기준 위치로 이동 ===
 def motor_init():
-    portHandler = PortHandler('COM12')  # 너의 포트 번호로 수정!
+    portHandler = PortHandler('COM3')  # 너의 포트 번호로 수정!
     packetHandler = PacketHandler(2.0)
 
     if not portHandler.openPort():

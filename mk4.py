@@ -12,48 +12,53 @@ ADDR_ACCELERATION = 108
 ADDR_VELOCITY = 112
 
 TORQUE_ENABLE = 1
-INIT_POSITION = 2048
+INIT_POSITION = 2048  # 기준 위치 (중앙)
 
-# === 각도 → 위치 변환 ===
+# === Joint1: θ1 [-90°, 90°] → 3072 ~ 1024
 def angle_to_position_joint1(theta1_deg):
-    return int(2048 - (theta1_deg - 180) * (1024 / 90))
+    return int(2048 - theta1_deg * (1024 / 90))
 
+# === Joint2: θ2 [0°, 360°] → 0 (펼침) ~ 2048 (접힘) ~ 4095 (대칭 접힘)
 def angle_to_position_joint2(theta2_deg):
-    return int(2048 - theta2_deg * (2048 / 180))
+    if theta2_deg < 180:
+        return int(2048 - theta2_deg * (2048 / 180))
+    else:
+        theta2_deg -= 180
+        return int(2048 + theta2_deg * (2048 / 180))
 
-# === 역기구학 ===
+
+    
+
+
+# === 역기구학 계산: (x, y) → θ1, θ2
 def inverse_kinematics(x, y):
-    dist = np.sqrt(x**2 + y**2)
-    if dist < abs(L1 - L2):
-        raise ValueError("❌ 너무 가까워 도달 불가")
-    if dist > (L1 + L2):
-        raise ValueError("❌ 너무 멀어서 도달 불가")
-
+    x_2 = x
+    x=abs(x)
+    y=abs(y)
     D = (x**2 + y**2 - L1**2 - L2**2) / (2 * L1 * L2)
-    D = np.clip(D, -1.0, 1.0)
+    if abs(D) > 1:
+        raise ValueError("도달할 수 없는 위치입니다.")
 
     theta2_rad = np.arccos(D)
-    theta2_deg = 180 - np.degrees(theta2_rad)
+    theta2_deg = np.degrees(theta2_rad)  # 0도에 가까울수록 펼침
+    theta2_deg = 180 - theta2_deg
 
-    # ✅ 좌표계 보정: θ1 = 0°일 때 정면(x+), 90°일 때 위쪽(y+)
-    theta1_rad = np.arctan2(x, -y) - np.arctan2(
-        L2 * np.sin(theta2_rad),
-        L1 + L2 * np.cos(theta2_rad)
-    )
+    theta1_rad = np.arctan2(y, x) - np.arctan2(L2*np.sin(theta2_rad), L1 + L2*np.cos(theta2_rad))
     theta1_deg = np.degrees(theta1_rad)
-    if theta1_deg < 0:
-        theta1_deg += 360
 
-    # 실제 동작 범위: [0°, 180°] (오른쪽 반원만)
-    if not (0 <= theta1_deg <= 180):
+    # 대칭 처리
+    if x_2 < 0:
+        theta1_deg *= -1
+        theta2_deg = 180 + theta2_deg  # 180을 기준으로 대칭
+
+    if not (-90 <= theta1_deg <= 90):
         raise ValueError(f"❌ Joint1 범위 초과: θ1 = {theta1_deg:.2f}°")
 
     return theta1_deg, theta2_deg
 
-
-# === 모터 초기화 ===
+# === 모터 초기화
 def motor_init():
-    portHandler = PortHandler('COM12')  # 포트 확인
+    portHandler = PortHandler('COM3')  # 사용 포트에 맞게 수정
     packetHandler = PacketHandler(2.0)
 
     if not portHandler.openPort():
@@ -69,7 +74,7 @@ def motor_init():
 
     return portHandler, packetHandler
 
-# === 이동 명령 ===
+# === 이동 명령
 def move_to(x, y, portHandler, packetHandler):
     try:
         theta1, theta2 = inverse_kinematics(x, y)
@@ -83,9 +88,9 @@ def move_to(x, y, portHandler, packetHandler):
         print(f"   → θ1 = {theta1:.2f}°, θ2 = {theta2:.2f}°")
         print(f"   → pos1 = {pos1}, pos2 = {pos2}\n")
     except ValueError as e:
-        print(e)
+        print(str(e))
 
-# === 메인 루프 ===
+# === 메인 루프
 if __name__ == "__main__":
     portHandler, packetHandler = motor_init()
 
@@ -93,7 +98,7 @@ if __name__ == "__main__":
         while True:
             user_input = input("목표 좌표 (x,y cm) 또는 'init': ").strip()
             if user_input.lower() == 'init':
-                print("\n🔄 모터 초기화 중...\n")
+                print("\n 모터 초기화 중...\n")
                 portHandler.closePort()
                 portHandler, packetHandler = motor_init()
                 continue
@@ -104,5 +109,5 @@ if __name__ == "__main__":
             except:
                 print("❗ 올바른 형식: x,y 또는 'init'")
     except KeyboardInterrupt:
-        print("\n🛑 종료됨")
+        print("\n종료됨")
         portHandler.closePort()
