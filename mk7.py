@@ -97,7 +97,6 @@ def motor_init():
 def move_to(x, y, portHandler, packetHandler):
     try:
         theta1, theta2, theta3 = inverse_kinematics(x, y)
-        # theta3 = theta2 - theta1  # 그리퍼 회전 보정
 
         pos1 = angle_to_position_joint1(theta1)
         pos2 = angle_to_position_joint2(theta2)
@@ -108,11 +107,19 @@ def move_to(x, y, portHandler, packetHandler):
         packetHandler.write4ByteTxRx(portHandler, 3, ADDR_GOAL_POSITION, pos3)
 
         print(f"\n 입력 좌표: ({x:.1f}, {y:.1f})")
-        print(f"   → θ1 = {theta1:.2f}°, θ2 = {theta2:.2f}°, θ3 (Gripper 회전) = {theta3:.2f}°")
+        print(f"   → θ1 = {theta1:.2f}°, θ2 = {theta2:.2f}°, θ3 (Gripper 평행 보정) = {theta3:.2f}°")
         print(f"   → pos1 = {pos1}, pos2 = {pos2}, pos3 = {pos3}\n")
     except ValueError as e:
         print(str(e))
 
+# === 그리퍼 회전 ===
+def rotate_gripper(theta_deg, portHandler, packetHandler):
+    if not -90 <= theta_deg <= 90:
+        print("회전 각도는 -90° ~ 90° 범위여야 합니다.")
+        return
+    pos = angle_to_position_joint3(theta_deg)
+    packetHandler.write4ByteTxRx(portHandler, 3, ADDR_GOAL_POSITION, pos)
+    print(f"그리퍼 {theta_deg:.1f}°로 회전 (pos = {pos})")
 
 # === 그리퍼 열기 ===
 def open_gripper(portHandler, packetHandler):
@@ -142,7 +149,7 @@ if __name__ == "__main__":
 
     try:
         while True:
-            cmd = input("\n명령 입력 (x,y / open / close / init / exit): ").strip().lower()
+            cmd = input("\n명령 입력 (x,y / open / close / rotate deg / init / exit): ").strip().lower()
 
             if cmd == 'init':
                 print(" 모터 재초기화 중...")
@@ -155,6 +162,14 @@ if __name__ == "__main__":
             elif cmd == 'close':
                 close_gripper(portHandler, packetHandler)
 
+            elif cmd.startswith('rotate'):
+                try:
+                    _, angle_str = cmd.split()
+                    theta_deg = float(angle_str)
+                    rotate_gripper(theta_deg, portHandler, packetHandler)
+                except:
+                    print("사용법: rotate 30 (단위: 도)")
+
             elif cmd == 'exit':
                 print("종료")
                 break
@@ -164,7 +179,7 @@ if __name__ == "__main__":
                     x, y = map(float, cmd.split(','))
                     move_to(x, y, portHandler, packetHandler)
                 except:
-                    print("올바른 입력이 아닙니다. (예: 10,5 / open / close / init / exit)")
+                    print("올바른 입력이 아닙니다. (예: 10,5 / open / close / rotate 30 / init / exit)")
 
     except KeyboardInterrupt:
         print("\n종료됨")
