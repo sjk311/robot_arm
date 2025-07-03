@@ -113,13 +113,25 @@ def move_to(x, y, portHandler, packetHandler):
         print(str(e))
 
 # === 그리퍼 회전 ===
-def rotate_gripper(theta_deg, portHandler, packetHandler):
-    if not -90 <= theta_deg <= 90:
-        print("회전 각도는 -90° ~ 90° 범위여야 합니다.")
-        return
-    pos = angle_to_position_joint3(theta_deg)
-    packetHandler.write4ByteTxRx(portHandler, 3, ADDR_GOAL_POSITION, pos)
-    print(f"그리퍼 {theta_deg:.1f}°로 회전 (pos = {pos})")
+def rotate_gripper(delta_deg, portHandler, packetHandler):
+    # 현재 위치 읽기
+    present_pos, _, _ = packetHandler.read4ByteTxRx(portHandler, 3, ADDR_PRESENT_POSITION)
+
+    # 현재 pos → 각도로 환산
+    current_deg = (present_pos - 2048) * (90.0 / 1024)
+
+    # 목표 각도 계산
+    target_deg = current_deg + delta_deg
+    print(f"joint3: 현재 = {current_deg:.2f}°, 목표 = {target_deg:.2f}°")
+
+
+    # 목표 각도를 위치값으로 변환
+    target_pos = angle_to_position_joint3(target_deg)
+
+    # 명령 전송
+    packetHandler.write4ByteTxRx(portHandler, 3, ADDR_GOAL_POSITION, target_pos)
+    print(f"→ 그리퍼 {delta_deg:+.1f}° 회전 (목표 pos = {target_pos})")
+
 
 # === 그리퍼 열기 ===
 def open_gripper(portHandler, packetHandler):
